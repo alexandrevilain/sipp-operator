@@ -1,0 +1,7 @@
+apiVersion: sipp.alexandrevilain.dev/v1
+kind: SippScenario
+metadata:
+  name: sippscenario-sample
+spec:
+  # Add fields here
+  foo: bar

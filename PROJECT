@@ -1,0 +1,10 @@
+domain: alexandrevilain.dev
+repo: github.com/alexandrevilain/sipp-operator
+resources:
+- group: sipp
+  kind: SippScenario
+  version: v1
+- group: sipp
+  kind: SippScenarioRun
+  version: v1
+version: "2"
