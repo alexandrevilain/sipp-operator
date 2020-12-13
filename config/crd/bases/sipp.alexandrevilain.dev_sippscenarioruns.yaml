@@ -1,0 +1,155 @@
+
+---
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.2.5
+  creationTimestamp: null
+  name: sippscenarioruns.sipp.alexandrevilain.dev
+spec:
+  additionalPrinterColumns:
+  - JSONPath: .metadata.creationTimestamp
+    name: Age
+    type: date
+  - JSONPath: .status.active
+    name: Active
+    type: integer
+  - JSONPath: .status.succeeded
+    name: Succeeded
+    type: integer
+  - JSONPath: .status.failed
+    name: Failed
+    type: integer
+  group: sipp.alexandrevilain.dev
+  names:
+    kind: SippScenarioRun
+    listKind: SippScenarioRunList
+    plural: sippscenarioruns
+    shortNames:
+    - ssr
+    singular: sippscenariorun
+  scope: Namespaced
+  subresources:
+    status: {}
+  validation:
+    openAPIV3Schema:
+      description: SippScenarioRun is the Schema for the sippscenarioruns API
+      properties:
+        apiVersion:
+          description: 'APIVersion defines the versioned schema of this representation
+            of an object. Servers should convert recognized schemas to the latest
+            internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+          type: string
+        kind:
+          description: 'Kind is a string value representing the REST resource this
+            object represents. Servers may infer this from the endpoint the client
+            submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+          type: string
+        metadata:
+          type: object
+        spec:
+          description: 'SippScenarioRunSpec defines the desired state of SippScenarioRun
+            TODO(alexandrevilain): Implement a Validating Admission Webhook If the
+            CommandOverride is empty and the destination too, we should throw an error'
+          properties:
+            annotations:
+              additionalProperties:
+                type: string
+              description: Annotations added to the created jobs
+              type: object
+            callLength:
+              description: CallLength controls the length of calls See the -d parameter
+                documentation
+              format: int32
+              type: integer
+            commandOverride:
+              description: CommandOverride allows to bypass all configuration fields
+                If set, all fields are ignored
+              type: string
+            destination:
+              description: Destination
+              type: string
+            exitWhenCallsProcessed:
+              description: ExitWhenCallsProcessed sets sipp to stop the test and exit
+                when 'calls' calls are processed
+              type: boolean
+            image:
+              description: Sipp docker image Defaults to ctaloi/sipp
+              type: string
+            imagePullSecrets:
+              description: 'ImagePullSecrets is an optional list of references to
+                secrets in the same namespace to use for pulling the sipp image More
+                info: https://kubernetes.io/docs/concepts/containers/images#specifying-imagepullsecrets-on-a-pod'
+              items:
+                description: LocalObjectReference contains enough information to let
+                  you locate the referenced object inside the same namespace.
+                properties:
+                  name:
+                    description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                      TODO: Add other useful fields. apiVersion, kind, uid?'
+                    type: string
+                type: object
+              type: array
+            parallelism:
+              description: ParallelismsSpecifies the maximum desired number of sipp
+                instance you want to run at the same time
+              format: int32
+              type: integer
+            scenarioRef:
+              description: ScenarioRef holds the fields to identify the scenario used
+                for this run
+              properties:
+                name:
+                  description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                    TODO: Add other useful fields. apiVersion, kind, uid?'
+                  type: string
+              type: object
+            transport:
+              description: Transport See the -t parameter documentation
+              properties:
+                compression:
+                  type: boolean
+                protocol:
+                  description: Protocol defines the protocol used in the scenario
+                    run
+                  type: string
+                socket:
+                  description: Socket defines the socket configuration of the scenario
+                    run
+                  type: string
+              required:
+              - protocol
+              - socket
+              type: object
+          required:
+          - scenarioRef
+          type: object
+        status:
+          description: SippScenarioRunStatus defines the observed state of SippScenarioRun
+          properties:
+            active:
+              description: The number of actively running sipp instance.
+              format: int32
+              type: integer
+            failed:
+              description: The number of sipp instances which reached phase Failed.
+              format: int32
+              type: integer
+            succeeded:
+              description: The number of sipp instances which reached phase Succeeded.
+              format: int32
+              type: integer
+          type: object
+      type: object
+  version: v1alpha1
+  versions:
+  - name: v1alpha1
+    served: true
+    storage: true
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []
