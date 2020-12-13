@@ -1,0 +1,13 @@
+apiVersion: sipp.alexandrevilain.dev/v1alpha1
+kind: SippScenarioRun
+metadata:
+  name: sippscenariorun-sample
+spec:
+  scenarioRef:
+    name: sippscenario-sample
+  destination: my.sip.endpoint
+  callLength: 60
+  transport:
+    protocol: UDP
+    socket: OnePerCall
+  

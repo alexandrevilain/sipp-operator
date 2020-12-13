@@ -20,11 +20,17 @@ import (
 	"context"
 
 	"github.com/go-logr/logr"
+	batchv1 "k8s.io/api/batch/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+	clientretry "k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	sippv1 "github.com/alexandrevilain/sipp-operator/api/v1"
+	v1alpha1 "github.com/alexandrevilain/sipp-operator/api/v1alpha1"
+	"github.com/alexandrevilain/sipp-operator/internal/resource"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
 // SippScenarioRunReconciler reconciles a SippScenarioRun object
@@ -36,18 +42,91 @@ type SippScenarioRunReconciler struct {
 
 // +kubebuilder:rbac:groups=sipp.alexandrevilain.dev,resources=sippscenarioruns,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=sipp.alexandrevilain.dev,resources=sippscenarioruns/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=sipp.alexandrevilain.dev,resources=sippscenario,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=sipp.alexandrevilain.dev,resources=sippscenario/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=batch,resources=jobs/status,verbs=get
+// +kubebuilder:rbac:groups=core,resources=jobs,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=core,resources=jobs/status,verbs=get
 
 func (r *SippScenarioRunReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	_ = context.Background()
-	_ = r.Log.WithValues("sippscenariorun", req.NamespacedName)
+	ctx := context.Background()
+	log := r.Log.WithValues("sippscenariorun", req.NamespacedName)
 
-	// your logic here
+	log.Info("Retrieved a new reconcile event")
+
+	scenarioRun := &v1alpha1.SippScenarioRun{}
+	err := r.Get(ctx, req.NamespacedName, scenarioRun)
+	if err != nil {
+		log.Error(err, "unable to fetch SippScenarioRun")
+		return ctrl.Result{}, err
+	}
+
+	// Get the linked scenario
+	scenario := &v1alpha1.SippScenario{}
+	err = r.Get(ctx, types.NamespacedName{Namespace: req.Namespace, Name: scenarioRun.Spec.ScenarioRef.Name}, scenario)
+	if err != nil {
+		log.Error(err, "unable to fetch SippScenario")
+		return ctrl.Result{}, err
+	}
+
+
+	resourceBuilder := resource.SippResourceBuilder{
+		Instance: scenarioRun,
+		Scenario: scenario,
+		Scheme:   r.Scheme,
+	}
+
+	builders, err := resourceBuilder.ResourceBuilders()
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	for _, builder := range builders {
+		resource, err := builder.Build()
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+
+		var operationResult controllerutil.OperationResult
+		err = clientretry.RetryOnConflict(clientretry.DefaultRetry, func() error {
+			var apiError error
+			operationResult, apiError = controllerutil.CreateOrUpdate(ctx, r, resource, func() error {
+				return builder.Update(resource)
+			})
+			return apiError
+		})
+		if err != nil {
+			log.Error(err, "unable to create or update resource")
+		}
+
+		log.Info("builder finished", "operationResult", operationResult)
+	}
+
+	// Update status
+	childJob := &batchv1.Job{}
+	err = r.Get(ctx, types.NamespacedName{Namespace: req.Namespace, Name: scenarioRun.ChildResourceName("job")}, childJob)
+	if err != nil && !apierrors.IsNotFound(err) {
+		log.Error(err, "unable to get child job")
+		return ctrl.Result{}, err
+	}
+
+	scenarioRun.Status.Active = childJob.Status.Active
+	scenarioRun.Status.Failed = childJob.Status.Failed
+	scenarioRun.Status.Succeeded = childJob.Status.Succeeded
+
+	err = r.Status().Update(ctx, scenarioRun)
+	if err != nil {
+		log.Error(err, "unable to update SippScenarioRun status")
+		return ctrl.Result{}, err
+	}
 
 	return ctrl.Result{}, nil
 }
 
 func (r *SippScenarioRunReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&sippv1.SippScenarioRun{}).
+		For(&v1alpha1.SippScenarioRun{}).
+		Owns(&batchv1.Job{}).
 		Complete(r)
 }
